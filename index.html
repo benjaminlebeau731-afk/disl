@@ -1,19 +1,25 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>LED Screen Sync</title>
+    <title>LED Screen Sync (Fixed)</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; }
-        #status { margin: 20px; font-weight: bold; }
+        body { font-family: sans-serif; text-align: center; padding: 50px; background: #222; color: white; }
+        button { padding: 15px 25px; margin: 10px; font-size: 16px; cursor: pointer; font-weight: bold; }
+        #status { margin: 20px; font-size: 18px; color: #4CAF50; }
+        .error { color: #f44336 !important; font-weight: bold; }
+        .warning { color: #ffeb3b; font-size: 14px; margin-bottom: 20px; }
         canvas { display: none; }
     </style>
 </head>
 <body>
     <h1>LED Controller Sync</h1>
-    <button id="connect">1. Connect Bluetooth</button>
+    <div class="warning">⚠️ CRITICAL: Turn OFF your phone's Bluetooth entirely before clicking connect!</div>
+    
+    <button id="connect">1. Connect to LED</button>
     <button id="sync" disabled>2. Start Screen Sync</button>
-    <div id="status">Status: Disconnected</div>
-    <canvas id="canvas"></canvas>
+    
+    <div id="status">Status: Waiting to connect...</div>
+    <canvas id="canvas" width="1" height="1"></canvas>
 
     <script>
         let device, characteristic;
@@ -21,39 +27,77 @@
         const syncBtn = document.getElementById('sync');
         const status = document.getElementById('status');
         const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
         connectBtn.onclick = async () => {
+            status.innerText = "Status: Searching for devices...";
+            status.className = "";
+            
             try {
-                // Look for MeRGBW controllers
+                // FORCE SHOW ALL DEVICES
                 device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'Triones' }, { namePrefix: 'LED' }],
-                    optionalServices: ['0000ffd0-0000-1000-8000-00805f9b34fb']
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        '0000ffd0-0000-1000-8000-00805f9b34fb', // Standard MeRGBW
+                        '0000ffe0-0000-1000-8000-00805f9b34fb'  // Alternate Triones
+                    ]
                 });
+                
+                status.innerText = `Status: Connecting to ${device.name || "Unknown Device"}...`;
                 const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('0000ffd0-0000-1000-8000-00805f9b34fb');
+                
+                let service;
+                try {
+                    // Try the primary service ID first
+                    service = await server.getPrimaryService('0000ffd0-0000-1000-8000-00805f9b34fb');
+                } catch (e) {
+                    // Try the fallback if the first one fails
+                    service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
+                }
+                
                 characteristic = await service.getCharacteristic('0000ffd1-0000-1000-8000-00805f9b34fb');
                 
-                status.innerText = "Status: Connected!";
+                status.innerText = `Status: Connected to ${device.name || "LEDs"}! Ready to sync.`;
                 syncBtn.disabled = false;
             } catch (err) {
-                status.innerText = "Error: " + err;
+                status.innerText = "Error: " + err.message;
+                status.className = "error";
+                console.error(err);
             }
         };
 
         syncBtn.onclick = async () => {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.play();
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.play();
 
-            setInterval(async () => {
-                ctx.drawImage(video, 0, 0, 1, 1);
-                const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-                // MeRGBW Protocol: [0x56, R, G, B, White, Type, 0xaa]
-                const data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
-                if (characteristic) await characteristic.writeValue(data);
-            }, 200); // Update every 200ms
+                status.innerText = "Status: Syncing screen colors in real-time...";
+                status.className = "";
+
+                setInterval(async () => {
+                    if (!characteristic) return;
+                    
+                    // Draw a 1x1 pixel representation of the screen to get the average color
+                    ctx.drawImage(video, 0, 0, 1, 1);
+                    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+                    
+                    // MeRGBW Protocol: [0x56, R, G, B, White, Type, 0xaa]
+                    const data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
+                    
+                    try {
+                        // Fire and forget - much faster than writeValue()
+                        await characteristic.writeValueWithoutResponse(data);
+                    } catch (e) {
+                        // Ignore dropped frames to prevent the loop from crashing
+                    }
+                }, 150); // Updates ~6 times a second
+
+            } catch (err) {
+                status.innerText = "Screen Sync Error: " + err.message;
+                status.className = "error";
+            }
         };
     </script>
 </body>
