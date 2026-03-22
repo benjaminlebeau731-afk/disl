@@ -3,305 +3,227 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate LED Screen Sync</title>
+    <title>LED Sync Pro</title>
     <style>
-        :root {
-            --bg: #0f172a;
-            --surface: #1e293b;
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
-            --success: #10b981;
-            --success-hover: #059669;
-            --text: #f8fafc;
-            --text-muted: #94a3b8;
-        }
-
-        body { 
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
-            text-align: center; 
-            padding: 40px 20px; 
-            background: var(--bg); 
-            color: var(--text); 
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 500px;
-            background: var(--surface);
-            padding: 40px;
-            border-radius: 24px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        h1 {
-            margin-top: 0;
-            font-size: 28px;
-            font-weight: 800;
-            background: linear-gradient(to right, #60a5fa, #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .status-box { 
-            margin: 24px 0; 
-            padding: 16px;
-            border-radius: 12px;
-            background: rgba(0,0,0,0.2);
-            font-family: monospace;
-            font-size: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: all 0.3s ease;
-        }
-
-        .error { border-color: #ef4444; color: #fca5a5; background: rgba(239, 68, 68, 0.1); }
-        .success { border-color: var(--success); color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
-
-        .btn-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        button, select { 
-            padding: 16px 24px; 
-            font-size: 16px; 
-            cursor: pointer; 
-            border: none; 
-            border-radius: 12px;
-            transition: all 0.2s;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        select {
-            background: #334155;
-            color: white;
-            appearance: none;
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        select:hover { background: #475569; }
-
-        #connect { background: var(--primary); color: white; }
-        #connect:hover { background: var(--primary-hover); transform: translateY(-2px); }
+        :root { --bg: #0f172a; --surface: #1e293b; --primary: #3b82f6; --success: #10b981; --text: #f8fafc; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 550px; background: var(--surface); padding: 30px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+        h1 { margin-top: 0; text-align: center; color: #60a5fa; }
         
+        button, select { 
+            width: 100%; padding: 15px; margin: 8px 0; font-size: 16px; font-weight: bold; border: none; 
+            border-radius: 10px; cursor: pointer; transition: 0.2s; box-sizing: border-box; 
+        }
+        select { background: #334155; color: white; border: 1px solid #475569; text-align: center; }
+        #connect { background: var(--primary); color: white; }
         #sync { background: var(--success); color: white; }
-        #sync:disabled { background: #334155; color: #64748b; cursor: not-allowed; transform: none; }
-        #sync:hover:not(:disabled) { background: var(--success-hover); transform: translateY(-2px); }
-
-        .preview-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-            margin: 20px 0;
-        }
-
-        #colorPreview {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #000;
-            border: 2px solid rgba(255,255,255,0.2);
-            box-shadow: 0 0 15px rgba(0,0,0,0.5);
-            transition: background 0.1s ease;
-        }
-
-        .instructions {
-            text-align: left;
-            font-size: 13px;
-            color: var(--text-muted);
-            margin-top: 30px;
-            line-height: 1.6;
-            background: rgba(0,0,0,0.2);
-            padding: 20px;
-            border-radius: 12px;
-        }
-
+        #sync:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+        
+        .preview-box { display: flex; align-items: center; justify-content: space-between; background: #000; padding: 15px; border-radius: 10px; margin: 15px 0; border: 1px solid #333; }
+        #colorBlob { width: 40px; height: 40px; border-radius: 50%; background: #222; box-shadow: 0 0 10px #000; transition: background 0.1s; }
+        
+        #log { background: #000; color: #0f0; font-family: monospace; font-size: 12px; padding: 15px; height: 150px; overflow-y: auto; border-radius: 10px; margin-top: 15px; white-space: pre-wrap; }
         canvas { display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>LED Screen Sync</h1>
+    <h1>LED Sync Pro</h1>
     
-    <div id="status" class="status-box">Status: Ready. Turn off phone Bluetooth.</div>
+    <button id="connect">1. Connect Bluetooth</button>
     
-    <div class="btn-group">
-        <button id="connect">🔌 1. Connect LED Strip</button>
-        
-        <select id="protocolSelect">
-            <option value="triones">Protocol A (Triones / MagicBlue)</option>
-            <option value="elk">Protocol B (ELK-BLEDOM / Apollo)</option>
-            <option value="simple">Protocol C (Simple RGB / HappyLighting)</option>
-        </select>
+    <select id="protocol">
+        <option value="triones">Protocol 1: Triones / MagicBlue (0x56)</option>
+        <option value="elk">Protocol 2: ELK-BLEDOM (0x7E)</option>
+        <option value="govee">Protocol 3: Govee Basic (0x33)</option>
+        <option value="raw">Protocol 4: Raw RGB</option>
+        <option value="elk_alt">Protocol 5: ELK Alternate (0x7E...0x10)</option>
+    </select>
 
-        <button id="sync" disabled>📺 2. Start Screen Sync</button>
+    <button id="sync" disabled>2. Start Screen Sync</button>
+
+    <div class="preview-box">
+        <span>Live Screen Average:</span>
+        <div id="colorBlob"></div>
     </div>
 
-    <div class="preview-container">
-        <span style="font-size: 14px; color: var(--text-muted);">Live Screen Color:</span>
-        <div id="colorPreview"></div>
+    <div style="font-size: 13px; color: #94a3b8; margin-top: 10px;">
+        <strong>Crucial Fixes for Connections:</strong><br>
+        1. Unplug the lights from the wall for 10 seconds.<br>
+        2. Turn your PHONE'S Bluetooth OFF entirely.<br>
+        3. Make sure Windows Settings says "Ready to pair", NOT "Connected".
     </div>
 
-    <div class="instructions">
-        <strong>If lights don't change:</strong><br>
-        1. Keep the sync running.<br>
-        2. Change the Protocol dropdown.<br>
-        3. The new protocol will apply instantly.
-    </div>
+    <div id="log">Awaiting action...</div>
 </div>
 
-<canvas id="canvas" width="1" height="1"></canvas>
+<canvas id="canvas"></canvas>
 
 <script>
-    let device, characteristic;
-    let syncInterval;
     const connectBtn = document.getElementById('connect');
     const syncBtn = document.getElementById('sync');
-    const statusDiv = document.getElementById('status');
-    const colorPreview = document.getElementById('colorPreview');
-    const protocolSelect = document.getElementById('protocolSelect');
+    const protocolSel = document.getElementById('protocol');
+    const colorBlob = document.getElementById('colorBlob');
+    const logDiv = document.getElementById('log');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-    const SERVICE_UUIDS = [
-        '0000ffd0-0000-1000-8000-00805f9b34fb',
-        '0000ffe0-0000-1000-8000-00805f9b34fb',
-        '0000fff0-0000-1000-8000-00805f9b34fb'
-    ];
+    let device, characteristic, videoStream;
+    let isSyncing = false;
+    let isWriting = false; // Prevents BLE crash
 
-    function updateStatus(msg, type = '') {
-        statusDiv.innerText = "Status: " + msg;
-        statusDiv.className = 'status-box ' + type;
+    function log(msg) {
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        logDiv.innerHTML = `[${time}] ${msg}\n` + logDiv.innerHTML;
+    }
+
+    // Attempt to boost saturation so colors aren't muddy
+    function boostColor(r, g, b) {
+        let max = Math.max(r, g, b), min = Math.min(r, g, b);
+        if (max === min) return [r, g, b]; // grayscale
+        let factor = 255 / max; // brighten
+        return [Math.min(255, Math.round(r * factor)), Math.min(255, Math.round(g * factor)), Math.min(255, Math.round(b * factor))];
     }
 
     connectBtn.onclick = async () => {
-        updateStatus("Scanning... Select your device in the popup.", "");
-        
+        log("Requesting Bluetooth Device...");
         try {
+            // Broad search for standard LED services
             device = await navigator.bluetooth.requestDevice({
                 acceptAllDevices: true,
-                optionalServices: SERVICE_UUIDS
+                optionalServices: [
+                    0xffd0, 0xffd5, 0xffe0, 0xffe5, 0xfff0, 
+                    '00001812-0000-1000-8000-00805f9b34fb'
+                ]
             });
 
-            updateStatus(`Found ${device.name || 'Device'}. Connecting...`);
+            log(`Found: ${device.name}. Connecting to GATT...`);
             
+            // Handle disconnection
+            device.addEventListener('gattserverdisconnected', () => {
+                log("DEVICE DISCONNECTED. Please reconnect.");
+                isSyncing = false;
+                syncBtn.disabled = true;
+            });
+
             const server = await device.gatt.connect();
+            log("GATT Connected. Finding service...");
+
+            const services = await server.getPrimaryServices();
+            let targetService = services.find(s => [0xffd0, 0xffd5, 0xffe0, 0xffe5, 0xfff0].includes(s.uuid) || s.uuid.includes('ffd') || s.uuid.includes('ffe'));
             
-            let service;
-            for (const uuid of SERVICE_UUIDS) {
-                try {
-                    service = await server.getPrimaryService(uuid);
-                    if (service) break;
-                } catch (e) { continue; }
-            }
-
-            if (!service) throw new Error("Compatible service not found.");
-
-            const characteristics = await service.getCharacteristics();
+            if (!targetService) targetService = services[0]; // Fallback to first available
+            
+            log(`Found Service: ${targetService.uuid}. Getting characteristics...`);
+            const characteristics = await targetService.getCharacteristics();
+            
             characteristic = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
+            
+            if (!characteristic) throw new Error("No writable characteristics found.");
+            
+            log(`Success! Using characteristic: ${characteristic.uuid}`);
+            
+            // Send standard wake up sequences just in case
+            try { await characteristic.writeValue(new Uint8Array([0xcc, 0x23, 0x33])); } catch(e){}
+            try { await characteristic.writeValue(new Uint8Array([0x7e, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0xef])); } catch(e){}
 
-            if (!characteristic) throw new Error("No writable characteristic found.");
-
-            // Try sending wake-up bytes for various models
-            await characteristic.writeValue(new Uint8Array([0xcc, 0x23, 0x33])).catch(() => {});
-            await characteristic.writeValue(new Uint8Array([0x7e, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0xef])).catch(() => {});
-
-            updateStatus("Connected! You can now start sync.", "success");
             syncBtn.disabled = false;
-            connectBtn.innerText = "✓ Connected";
             connectBtn.style.background = "#334155";
-            connectBtn.style.pointerEvents = "none";
+            connectBtn.innerText = "Connected!";
 
-        } catch (err) {
-            console.error(err);
-            updateStatus(err.message, "error");
+        } catch (error) {
+            log("ERROR: " + error.message);
+            if(error.message.includes('NetworkError')) {
+                log("TIP: This means the lights rejected you. Unplug power, wait 10s, try again.");
+            }
         }
     };
 
+    function getPacket(r, g, b, protocol) {
+        switch (protocol) {
+            case 'triones': return new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
+            case 'elk': return new Uint8Array([0x7e, 0x00, 0x05, 0x03, r, g, b, 0x00, 0xef]);
+            case 'elk_alt': return new Uint8Array([0x7e, 0x07, 0x05, 0x03, r, g, b, 0x10, 0xef]);
+            case 'govee': 
+                let govee = new Uint8Array(20);
+                govee.set([0x33, 0x05, 0x02, r, g, b, 0x00, 0xff]);
+                // Govee requires a checksum
+                let checksum = 0;
+                for(let i=0; i<19; i++) checksum ^= govee[i];
+                govee[19] = checksum;
+                return govee;
+            case 'raw': return new Uint8Array([r, g, b]);
+        }
+    }
+
+    async function syncLoop(video) {
+        if (!isSyncing || !characteristic) return;
+
+        // Draw screen and get average pixel
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, 1, 1);
+        let [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        
+        // Boost color so it isn't gray
+        [r, g, b] = boostColor(r, g, b);
+
+        colorBlob.style.background = `rgb(${r},${g},${b})`;
+        colorBlob.style.boxShadow = `0 0 20px rgb(${r},${g},${b})`;
+
+        if (!isWriting) {
+            isWriting = true;
+            const data = getPacket(r, g, b, protocolSel.value);
+            
+            try {
+                if (characteristic.properties.writeWithoutResponse) {
+                    await characteristic.writeValueWithoutResponse(data);
+                } else {
+                    await characteristic.writeValue(data);
+                }
+            } catch (error) {
+                // Ignore DOMExceptions during fast writes
+                if (!error.message.includes("GATT")) console.log(error);
+            }
+            isWriting = false;
+        }
+
+        // Run loop roughly ~15 times a second
+        setTimeout(() => requestAnimationFrame(() => syncLoop(video)), 60);
+    }
+
     syncBtn.onclick = async () => {
-        if (syncBtn.innerText.includes("Stop")) {
-            clearInterval(syncInterval);
-            syncBtn.innerText = "📺 2. Start Screen Sync";
+        if (isSyncing) {
+            isSyncing = false;
+            syncBtn.innerText = "2. Start Screen Sync";
             syncBtn.style.background = "var(--success)";
-            updateStatus("Sync stopped.", "");
-            colorPreview.style.background = "#000";
+            if(videoStream) videoStream.getTracks().forEach(t => t.stop());
+            colorBlob.style.background = "#222";
+            log("Sync stopped.");
             return;
         }
 
         try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { cursor: "never" },
-                audio: false 
-            });
+            log("Requesting screen access...");
+            videoStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
             
             const video = document.createElement('video');
-            video.srcObject = stream;
+            video.srcObject = videoStream;
             
             video.onloadedmetadata = () => {
                 video.play();
-
-                updateStatus("Sync Active! Try changing the Protocol if lights don't react.", "success");
-                syncBtn.innerText = "⏹ Stop Sync";
+                isSyncing = true;
+                syncBtn.innerText = "Stop Sync";
                 syncBtn.style.background = "#ef4444";
-
-                syncInterval = setInterval(async () => {
-                    if (!characteristic || !video.videoWidth) return;
-
-                    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, 1, 1);
-                    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-
-                    colorPreview.style.background = `rgb(${r},${g},${b})`;
-                    colorPreview.style.boxShadow = `0 0 15px rgb(${r},${g},${b})`;
-
-                    let data;
-                    const protocol = protocolSelect.value;
-
-                    // Different LED controllers expect different byte sequences
-                    if (protocol === 'triones') {
-                        data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
-                    } else if (protocol === 'elk') {
-                        data = new Uint8Array([0x7e, 0x00, 0x05, 0x03, r, g, b, 0x00, 0xef]);
-                    } else if (protocol === 'simple') {
-                        data = new Uint8Array([0x00, r, g, b]);
-                    }
-
-                    try {
-                        if (characteristic.properties.writeWithoutResponse) {
-                            await characteristic.writeValueWithoutResponse(data);
-                        } else {
-                            await characteristic.writeValue(data);
-                        }
-                    } catch (e) {
-                        // Keep going if a frame drops
-                    }
-                }, 100); 
+                log("Syncing! If colors don't change, try a different Protocol in the dropdown above.");
+                syncLoop(video);
             };
 
-            stream.getVideoTracks()[0].onended = () => {
-                clearInterval(syncInterval);
-                syncBtn.innerText = "📺 2. Start Screen Sync";
-                syncBtn.style.background = "var(--success)";
-                updateStatus("Screen sharing ended by user.", "");
-                colorPreview.style.background = "#000";
+            videoStream.getVideoTracks()[0].onended = () => {
+                syncBtn.click(); // Trigger stop
             };
 
-        } catch (err) {
-            updateStatus("Screen capture failed: " + err.message, "error");
+        } catch (error) {
+            log("Screen capture error: " + error.message);
         }
     };
 </script>
