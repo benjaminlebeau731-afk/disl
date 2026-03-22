@@ -2,185 +2,130 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate LED Screen Sync</title>
+    <title>LED Sync v2 (Diagnostic Mode)</title>
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            text-align: center; 
-            padding: 40px; 
-            background: #1a1a1a; 
-            color: #e0e0e0; 
-        }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: #2d2d2d;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        button { 
-            padding: 15px 30px; 
-            margin: 10px; 
-            font-size: 16px; 
-            cursor: pointer; 
-            border: none; 
-            border-radius: 8px;
-            transition: all 0.2s;
-            font-weight: bold;
-        }
-        #connect { background: #4a90e2; color: white; }
-        #connect:hover { background: #357abd; }
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #121212; color: #eee; }
+        .box { max-width: 500px; margin: 0 auto; background: #1e1e1e; padding: 25px; border-radius: 12px; border: 1px solid #333; }
+        button { padding: 12px 20px; margin: 5px; font-weight: bold; cursor: pointer; border-radius: 5px; border: none; }
+        #connect { background: #3498db; color: white; }
         #sync { background: #2ecc71; color: white; }
-        #sync:disabled { background: #444; color: #888; cursor: not-allowed; }
-        #sync:hover:not(:disabled) { background: #27ae60; }
-        
-        #status { 
-            margin: 20px 0; 
-            padding: 15px;
-            border-radius: 5px;
-            background: #222;
-            font-family: monospace;
-            border-left: 5px solid #444;
-        }
-        .error { border-left-color: #e74c3c !important; color: #e74c3c; }
-        .success { border-left-color: #2ecc71 !important; color: #2ecc71; }
-        
-        .instructions {
-            text-align: left;
-            font-size: 14px;
-            color: #aaa;
-            margin-top: 20px;
-            line-height: 1.5;
-        }
+        #sync:disabled { background: #444; color: #777; }
+        #log { margin-top: 20px; padding: 10px; background: #000; color: #0f0; text-align: left; font-family: monospace; font-size: 12px; height: 120px; overflow-y: auto; border-radius: 5px; border: 1px solid #444; }
+        .stat-box { display: flex; justify-content: space-around; margin: 15px 0; font-size: 14px; color: #aaa; }
         canvas { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>LED Screen Sync</h1>
+<div class="box">
+    <h2>LED Sync v2</h2>
     
-    <div id="status">Status: Ready. Please turn off phone Bluetooth.</div>
-    
-    <button id="connect">1. Connect to LED Controller</button>
-    <button id="sync" disabled>2. Start Screen Sync</button>
-
-    <div class="instructions">
-        <strong>Troubleshooting:</strong><br>
-        • If it fails: Unplug the lights, wait 5 seconds, plug back in.<br>
-        • Make sure the device isn't "Paired" in Windows Settings.<br>
-        • Use Chrome or Edge.
+    <div class="stat-box">
+        <div>Status: <span id="status">Disconnected</span></div>
+        <div>Sent: <span id="count">0</span></div>
     </div>
+
+    <button id="connect">1. Connect Bluetooth</button>
+    <button id="sync" disabled>2. Start Sync</button>
+    <button id="toggleProtocol" style="background:#555; color:white;">Switch Protocol (A/B)</button>
+
+    <div id="log">> System ready. Turn off phone Bluetooth before starting.</div>
 </div>
 
 <canvas id="canvas" width="1" height="1"></canvas>
 
 <script>
     let device, characteristic;
-    const connectBtn = document.getElementById('connect');
+    let packetCount = 0;
+    let currentProtocol = 'A'; // A = Triones, B = ELK
+    const logEl = document.getElementById('log');
+    const countEl = document.getElementById('count');
+    const statusEl = document.getElementById('status');
     const syncBtn = document.getElementById('sync');
-    const statusDiv = document.getElementById('status');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-    // Known Service UUIDs for MeRGBW / Triones / ELK-BLEDOM
-    const SERVICE_UUIDS = [
-        '0000ffd0-0000-1000-8000-00805f9b34fb',
-        '0000ffe0-0000-1000-8000-00805f9b34fb',
-        '0000fff0-0000-1000-8000-00805f9b34fb'
-    ];
-
-    function updateStatus(msg, type = '') {
-        statusDiv.innerText = "Status: " + msg;
-        statusDiv.className = type;
+    function logger(msg, isError = false) {
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        logEl.innerHTML = `<span style="color:${isError ? '#f44':'#0f0'}">[${time}] ${msg}</span><br>` + logEl.innerHTML;
     }
 
-    connectBtn.onclick = async () => {
-        updateStatus("Scanning... Select your device in the popup.", "");
-        
+    document.getElementById('toggleProtocol').onclick = () => {
+        currentProtocol = currentProtocol === 'A' ? 'B' : 'A';
+        logger(`Switched to Protocol ${currentProtocol}`);
+    };
+
+    document.getElementById('connect').onclick = async () => {
         try {
+            logger("Scanning...");
             device = await navigator.bluetooth.requestDevice({
                 acceptAllDevices: true,
-                optionalServices: SERVICE_UUIDS
+                optionalServices: ['0000ffd0-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb']
             });
 
-            updateStatus(`Found ${device.name || 'Device'}. Connecting...`);
-            
+            logger(`Connecting to ${device.name}...`);
             const server = await device.gatt.connect();
             
-            // Look for the correct service
-            let service;
-            for (const uuid of SERVICE_UUIDS) {
-                try {
-                    service = await server.getPrimaryService(uuid);
-                    if (service) break;
-                } catch (e) { continue; }
+            // Try Service Discovery
+            const services = await server.getPrimaryServices();
+            logger(`Found ${services.length} services.`);
+            
+            // Find the first writable characteristic
+            for (const service of services) {
+                const chars = await service.getCharacteristics();
+                characteristic = chars.find(c => c.properties.write || c.properties.writeWithoutResponse);
+                if (characteristic) break;
             }
 
-            if (!service) throw new Error("Compatible service not found. Unpair from Windows and try again.");
+            if (!characteristic) throw new Error("No writable channel found.");
 
-            // Get all characteristics and pick the one that allows writing
-            const characteristics = await service.getCharacteristics();
-            characteristic = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
-
-            if (!characteristic) throw new Error("No writable characteristic found.");
-
-            // Initialization byte (Wake up)
-            await characteristic.writeValue(new Uint8Array([0xcc, 0x23, 0x33])).catch(() => {});
-
-            updateStatus("Connected! You can now start sync.", "success");
+            statusEl.innerText = "Connected";
+            statusEl.style.color = "#2ecc71";
             syncBtn.disabled = false;
-            connectBtn.style.display = 'none';
+            logger("Successfully connected!");
 
         } catch (err) {
-            console.error(err);
-            updateStatus(err.message, "error");
+            logger(err.message, true);
         }
     };
 
     syncBtn.onclick = async () => {
         try {
-            // Request Screen Capture
-            const stream = await navigator.mediaDevices.getDisplayMedia({ 
-                video: { cursor: "never" },
-                audio: false 
-            });
-            
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
             const video = document.createElement('video');
             video.srcObject = stream;
             video.play();
+            logger("Screen capture started.");
 
-            updateStatus("Sync Active! The lights are following your screen.", "success");
-            syncBtn.innerText = "Syncing...";
-            syncBtn.disabled = true;
-
-            // Main Sync Loop
             setInterval(async () => {
                 if (!characteristic) return;
 
-                // Draw current screen frame to 1x1 canvas to get average color
                 ctx.drawImage(video, 0, 0, 1, 1);
                 const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
 
-                // MeRGBW Protocol: [Header, R, G, B, White, Type, Footer]
-                // 0x56 = Start, 0x00 = No White, 0xf0 = RGB mode, 0xaa = End
-                const data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
+                let data;
+                if (currentProtocol === 'A') {
+                    // Triones/MeRGBW: [56, R, G, B, White, Type, AA]
+                    data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
+                } else {
+                    // ELK-BLEDOM style: [7e, 00, 05, 03, R, G, B, 00, ef]
+                    data = new Uint8Array([0x7e, 0x00, 0x05, 0x03, r, g, b, 0x00, 0xef]);
+                }
 
                 try {
-                    // writeValueWithoutResponse is significantly faster for sync
+                    // Use writeValue to ensure the controller actually got it
                     await characteristic.writeValueWithoutResponse(data);
+                    packetCount++;
+                    countEl.innerText = packetCount;
                 } catch (e) {
-                    // Silently catch dropped frames to maintain speed
+                    if (packetCount % 10 === 0) logger("Write error: Device busy", true);
                 }
-            }, 100); // 10 updates per second (Smooth enough, doesn't crash BLE)
+            }, 200); // 5 times per second (much safer)
 
         } catch (err) {
-            updateStatus("Screen capture failed: " + err.message, "error");
+            logger(err.message, true);
         }
     };
 </script>
-
 </body>
 </html>
