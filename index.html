@@ -69,7 +69,7 @@
             margin-bottom: 24px;
         }
 
-        button { 
+        button, select { 
             padding: 16px 24px; 
             font-size: 16px; 
             cursor: pointer; 
@@ -81,7 +81,18 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+            width: 100%;
+            box-sizing: border-box;
         }
+
+        select {
+            background: #334155;
+            color: white;
+            appearance: none;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        select:hover { background: #475569; }
 
         #connect { background: var(--primary); color: white; }
         #connect:hover { background: var(--primary-hover); transform: translateY(-2px); }
@@ -119,7 +130,6 @@
             border-radius: 12px;
         }
 
-        .instructions strong { color: var(--text); }
         canvas { display: none; }
     </style>
 </head>
@@ -132,6 +142,13 @@
     
     <div class="btn-group">
         <button id="connect">🔌 1. Connect LED Strip</button>
+        
+        <select id="protocolSelect">
+            <option value="triones">Protocol A (Triones / MagicBlue)</option>
+            <option value="elk">Protocol B (ELK-BLEDOM / Apollo)</option>
+            <option value="simple">Protocol C (Simple RGB / HappyLighting)</option>
+        </select>
+
         <button id="sync" disabled>📺 2. Start Screen Sync</button>
     </div>
 
@@ -141,11 +158,10 @@
     </div>
 
     <div class="instructions">
-        <strong>Troubleshooting:</strong><br>
-        • If it fails: Unplug the lights, wait 5 seconds, plug back in.<br>
-        • Ensure the device is NOT currently connected to your phone.<br>
-        • Make sure the device isn't "Paired" in Windows Settings.<br>
-        • Must be run in Google Chrome or Microsoft Edge.
+        <strong>If lights don't change:</strong><br>
+        1. Keep the sync running.<br>
+        2. Change the Protocol dropdown.<br>
+        3. The new protocol will apply instantly.
     </div>
 </div>
 
@@ -158,10 +174,10 @@
     const syncBtn = document.getElementById('sync');
     const statusDiv = document.getElementById('status');
     const colorPreview = document.getElementById('colorPreview');
+    const protocolSelect = document.getElementById('protocolSelect');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-    // Standard UUIDs for MeRGBW / Triones / ELK-BLEDOM
     const SERVICE_UUIDS = [
         '0000ffd0-0000-1000-8000-00805f9b34fb',
         '0000ffe0-0000-1000-8000-00805f9b34fb',
@@ -194,15 +210,16 @@
                 } catch (e) { continue; }
             }
 
-            if (!service) throw new Error("Compatible service not found. Try unpairing from Windows.");
+            if (!service) throw new Error("Compatible service not found.");
 
             const characteristics = await service.getCharacteristics();
             characteristic = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
 
             if (!characteristic) throw new Error("No writable characteristic found.");
 
-            // Initialization byte (Wake up / Turn on)
+            // Try sending wake-up bytes for various models
             await characteristic.writeValue(new Uint8Array([0xcc, 0x23, 0x33])).catch(() => {});
+            await characteristic.writeValue(new Uint8Array([0x7e, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0xef])).catch(() => {});
 
             updateStatus("Connected! You can now start sync.", "success");
             syncBtn.disabled = false;
@@ -218,7 +235,6 @@
 
     syncBtn.onclick = async () => {
         if (syncBtn.innerText.includes("Stop")) {
-            // Handle Stop
             clearInterval(syncInterval);
             syncBtn.innerText = "📺 2. Start Screen Sync";
             syncBtn.style.background = "var(--success)";
@@ -236,49 +252,52 @@
             const video = document.createElement('video');
             video.srcObject = stream;
             
-            // Wait for video metadata to load to get accurate dimensions
             video.onloadedmetadata = () => {
                 video.play();
 
-                updateStatus("Sync Active! Lights are following your screen.", "success");
+                updateStatus("Sync Active! Try changing the Protocol if lights don't react.", "success");
                 syncBtn.innerText = "⏹ Stop Sync";
-                syncBtn.style.background = "#ef4444"; // Red for stop
+                syncBtn.style.background = "#ef4444";
 
                 syncInterval = setInterval(async () => {
                     if (!characteristic || !video.videoWidth) return;
 
-                    // CORRECT WAY TO AVERAGE: Draw full video scaled down to 1x1 canvas
                     ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, 1, 1);
                     const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
 
-                    // Update UI Preview
                     colorPreview.style.background = `rgb(${r},${g},${b})`;
                     colorPreview.style.boxShadow = `0 0 15px rgb(${r},${g},${b})`;
 
-                    // Protocol: [Header, R, G, B, White, Type, Footer]
-                    const data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
+                    let data;
+                    const protocol = protocolSelect.value;
+
+                    // Different LED controllers expect different byte sequences
+                    if (protocol === 'triones') {
+                        data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
+                    } else if (protocol === 'elk') {
+                        data = new Uint8Array([0x7e, 0x00, 0x05, 0x03, r, g, b, 0x00, 0xef]);
+                    } else if (protocol === 'simple') {
+                        data = new Uint8Array([0x00, r, g, b]);
+                    }
 
                     try {
-                        // Check which write method the device actually supports
                         if (characteristic.properties.writeWithoutResponse) {
                             await characteristic.writeValueWithoutResponse(data);
                         } else {
                             await characteristic.writeValue(data);
                         }
                     } catch (e) {
-                        // Silently catch dropped frames to maintain loop speed
+                        // Keep going if a frame drops
                     }
-                }, 100); // 10 fps
+                }, 100); 
             };
 
-            // Handle user stopping screen share from browser UI
             stream.getVideoTracks()[0].onended = () => {
                 clearInterval(syncInterval);
                 syncBtn.innerText = "📺 2. Start Screen Sync";
                 syncBtn.style.background = "var(--success)";
                 updateStatus("Screen sharing ended by user.", "");
                 colorPreview.style.background = "#000";
-                colorPreview.style.boxShadow = "none";
             };
 
         } catch (err) {
