@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LED Screen Sync</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; }
+        #status { margin: 20px; font-weight: bold; }
+        canvas { display: none; }
+    </style>
+</head>
+<body>
+    <h1>LED Controller Sync</h1>
+    <button id="connect">1. Connect Bluetooth</button>
+    <button id="sync" disabled>2. Start Screen Sync</button>
+    <div id="status">Status: Disconnected</div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        let device, characteristic;
+        const connectBtn = document.getElementById('connect');
+        const syncBtn = document.getElementById('sync');
+        const status = document.getElementById('status');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        connectBtn.onclick = async () => {
+            try {
+                // Look for MeRGBW controllers
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'Triones' }, { namePrefix: 'LED' }],
+                    optionalServices: ['0000ffd0-0000-1000-8000-00805f9b34fb']
+                });
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService('0000ffd0-0000-1000-8000-00805f9b34fb');
+                characteristic = await service.getCharacteristic('0000ffd1-0000-1000-8000-00805f9b34fb');
+                
+                status.innerText = "Status: Connected!";
+                syncBtn.disabled = false;
+            } catch (err) {
+                status.innerText = "Error: " + err;
+            }
+        };
+
+        syncBtn.onclick = async () => {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
+
+            setInterval(async () => {
+                ctx.drawImage(video, 0, 0, 1, 1);
+                const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+                // MeRGBW Protocol: [0x56, R, G, B, White, Type, 0xaa]
+                const data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
+                if (characteristic) await characteristic.writeValue(data);
+            }, 200); // Update every 200ms
+        };
+    </script>
+</body>
+</html>
