@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MeRGBW Screen Sync</title>
+    <title>Auto-Detect Screen Sync</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #121212; color: white; }
         button { padding: 15px 20px; margin: 10px; font-size: 16px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; }
@@ -11,17 +11,18 @@
         #syncBtn { background-color: #4CAF50; color: white; }
         #colorPreview { width: 150px; height: 150px; margin: 20px auto; border: 3px solid white; border-radius: 15px; background-color: black; }
         video, canvas { display: none; }
+        #log { margin-top: 20px; color: #aaa; font-size: 14px; }
     </style>
 </head>
 <body>
 
-    <h2>MeRGBW Monitor Sync</h2>
-    <p>Note: Must be run in Chrome or Edge.</p>
+    <h2>Auto-Detect Monitor Sync</h2>
     
-    <button id="connectBtn">1. Connect MeRGBW Lights</button>
+    <button id="connectBtn">1. Connect & Auto-Detect</button>
     <button id="syncBtn">2. Start Screen Sync</button>
 
     <div id="colorPreview"></div>
+    <div id="log">Waiting to connect...</div>
 
     <video id="video" autoplay></video>
     <canvas id="canvas" width="64" height="64"></canvas>
@@ -30,38 +31,71 @@
         let lightCharacteristic = null;
         let syncInterval = null;
 
-        // --- BLUETOOTH CONFIGURATION ---
-        // Updated specifically for MeRGBW controllers
-        const SERVICE_UUID = '0000fff0-0000-1000-8000-00805f9b34fb'; 
-        const CHARACTERISTIC_UUID = '0000fff4-0000-1000-8000-00805f9b34fb';
+        // The "Master Key" list of common MeRGBW / Generic LED Service UUIDs
+        const KNOWN_SERVICES = [
+            '0000ffe5-0000-1000-8000-00805f9b34fb', 
+            '0000fff0-0000-1000-8000-00805f9b34fb', 
+            '0000ffd5-0000-1000-8000-00805f9b34fb', 
+            '0000ffd0-0000-1000-8000-00805f9b34fb'  
+        ];
+
+        function updateLog(msg) {
+            document.getElementById('log').innerText = msg;
+            console.log(msg);
+        }
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
-                console.log("Requesting Bluetooth Device...");
+                updateLog("Requesting Bluetooth Device...");
                 const device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
-                    optionalServices: [SERVICE_UUID]
+                    optionalServices: KNOWN_SERVICES
                 });
 
-                console.log("Connecting to GATT Server...");
+                updateLog("Connecting to GATT Server...");
                 const server = await device.gatt.connect();
 
-                console.log("Getting Service...");
-                const service = await server.getPrimaryService(SERVICE_UUID);
+                updateLog("Scanning for known Services...");
+                const services = await server.getPrimaryServices();
+                
+                let activeService = null;
+                for (let s of services) {
+                    if (KNOWN_SERVICES.includes(s.uuid)) {
+                        activeService = s;
+                        updateLog("Found matching service: " + s.uuid);
+                        break;
+                    }
+                }
 
-                console.log("Getting Characteristic...");
-                lightCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+                if (!activeService) {
+                    alert("Connected, but couldn't find a matching Service UUID.");
+                    return;
+                }
 
-                alert("Successfully connected to MeRGBW lights!");
-                document.getElementById('connectBtn').innerText = "Connected!";
-                document.getElementById('connectBtn').style.backgroundColor = "green";
+                updateLog("Scanning for Write Channel...");
+                const characteristics = await activeService.getCharacteristics();
+                
+                // Automatically find the channel that allows sending color data
+                for (let c of characteristics) {
+                    if (c.properties.writeWithoutResponse || c.properties.write) {
+                        lightCharacteristic = c;
+                        updateLog("Success! Locked onto Write Channel: " + c.uuid);
+                        break;
+                    }
+                }
+
+                if (lightCharacteristic) {
+                    document.getElementById('connectBtn').innerText = "Connected!";
+                    document.getElementById('connectBtn').style.backgroundColor = "green";
+                }
+
             } catch (error) {
-                console.error("Bluetooth Error:", error);
-                alert("Could not connect. Make sure your lights are on, close to the PC, and the MeRGBW app on your phone is CLOSED.");
+                updateLog("Error: " + error.message);
+                alert("Connection failed. Make sure your phone's Bluetooth is OFF.");
             }
         });
 
-        // --- SCREEN SYNC CONFIGURATION ---
+        // --- SCREEN SYNC LOGIC ---
         document.getElementById('syncBtn').addEventListener('click', async () => {
             if (!lightCharacteristic) {
                 alert("Please connect to the lights first!");
@@ -78,11 +112,9 @@
 
                 syncInterval = setInterval(() => {
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
                     const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
                     
-                    let r = 0, g = 0, b = 0;
-                    let count = 0;
+                    let r = 0, g = 0, b = 0, count = 0;
                     
                     for (let i = 0; i < frameData.length; i += 16) { 
                         r += frameData[i];
@@ -96,14 +128,13 @@
                     b = Math.floor(b / count);
 
                     document.getElementById('colorPreview').style.backgroundColor = `rgb(${r},${g},${b})`;
-
                     sendColorToLight(r, g, b);
 
                 }, 200);
 
                 stream.getVideoTracks()[0].onended = () => {
                     clearInterval(syncInterval);
-                    alert("Screen sync stopped.");
+                    updateLog("Screen sync stopped.");
                 };
 
             } catch (error) {
@@ -113,14 +144,8 @@
 
         function sendColorToLight(r, g, b) {
             if (!lightCharacteristic) return;
-
-            // This byte array translates the color into hex data. 
-            // If the color doesn't change, MeRGBW might need a tweaked array!
             const data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
-            
-            lightCharacteristic.writeValueWithoutResponse(data).catch(err => {
-                console.error("Failed to send color:", err);
-            });
+            lightCharacteristic.writeValueWithoutResponse(data).catch(err => {});
         }
     </script>
 </body>
