@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auto-Detect Screen Sync</title>
+    <title>MeRGBW Screen Sync</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #121212; color: white; }
         button { padding: 15px 20px; margin: 10px; font-size: 16px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; }
@@ -16,9 +16,9 @@
 </head>
 <body>
 
-    <h2>Auto-Detect Monitor Sync</h2>
+    <h2>MeRGBW Monitor Sync</h2>
     
-    <button id="connectBtn">1. Connect & Auto-Detect</button>
+    <button id="connectBtn">1. Connect MeRGBW</button>
     <button id="syncBtn">2. Start Screen Sync</button>
 
     <div id="colorPreview"></div>
@@ -31,12 +31,11 @@
         let lightCharacteristic = null;
         let syncInterval = null;
 
-        // The "Master Key" list of common MeRGBW / Generic LED Service UUIDs
+        // We injected your specific 3519 UUID right here!
         const KNOWN_SERVICES = [
+            '00003519-0000-1000-8000-00805f9b34fb', // <-- YOUR SECRET KEY
             '0000ffe5-0000-1000-8000-00805f9b34fb', 
-            '0000fff0-0000-1000-8000-00805f9b34fb', 
-            '0000ffd5-0000-1000-8000-00805f9b34fb', 
-            '0000ffd0-0000-1000-8000-00805f9b34fb'  
+            '0000fff0-0000-1000-8000-00805f9b34fb'
         ];
 
         function updateLog(msg) {
@@ -144,6 +143,8 @@
 
         function sendColorToLight(r, g, b) {
             if (!lightCharacteristic) return;
+            
+            // The data structure sending the color to the lights
             const data = new Uint8Array([0x56, r, g, b, 0x00, 0xf0, 0xaa]);
             lightCharacteristic.writeValueWithoutResponse(data).catch(err => {});
         }
